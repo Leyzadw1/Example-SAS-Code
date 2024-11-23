@@ -1,0 +1,223 @@
+/* -----------------------------------------------------------------------------------------------------------------------
+                OVERVIEW
+		--------
+
+Project:       	nz_crime_locations
+
+Program Name:  	maximal_error_distance.sas
+
+Summary:       	In the NZ Crime Locations dashboard found on the link below...
+		https://app.powerbi.com/groups/me/reports/b20438fa-eea1-4b87-8465-663913dde8bb/ReportSectioneb702df32b73f329f1a0?experience=power-bi&bookmarkGuid=Bookmark50f7e301e3d2e9dafb9a
+		... we assume that every crime occurrs at the CENTROID of the corresponding meshblock. In this program 
+		we calculate the maximum distance from each meshblock centroid to a point on its boundary (i.e. we 
+		calculate the radius of the smallest circle that will entirely contain the meshblock). Note that this 
+		maximial distance will always occurr at a meshblock node due to the convexity of the Euclidean 
+		distance function and the polygonal nature of meshblocks. The distribution of this quantity (which
+		we term the maximal error distance) gives an indication of the error incurred as a result of the
+		aforementioned assumption.
+
+Details:       	Section 0:
+               	Libnames, Pathways & Static Macros
+
+		Section 1:
+		Calculating the maximal error distance for each meshblock
+
+		Section X:
+		Produce output data sets
+
+
+
+            	DEPENDENCIES AND LIMITATIONS
+		----------------------------
+
+Input(s):      	Meshblock Nodes WGS84.csv
+		2018 Meshblock Centroids.csv
+		AAA_MESHBLOCK_POPULATIONS_2018
+
+Output(s):     	AAA_Max_Error_Dist_by_MB
+
+Dependencies:  	NA
+
+Limitations:   	NA													*/
+
+
+
+
+
+
+/* Section 0 */
+/*-----------------------------------------------------------------------------------------------------------------------*/
+/* Libnames, Pathways & Static Macros */
+
+/* Libnames */
+libname Pop "XXX\Population Data";
+
+
+/* Pathways */
+
+
+/* Static macros */
+
+
+
+
+
+/* Section 1 */
+/*-----------------------------------------------------------------------------------------------------------------------*/
+/* Calculating the maximal error distance for each meshblock */
+
+/* 1.1a - Read in the meshblock nodes data set */
+FILENAME REFFILE "XXX\Meshblock Nodes WGS84.csv";
+PROC IMPORT DATAFILE=REFFILE replace
+	DBMS=csv
+	OUT=WORK.Rad1a;
+	GETNAMES=YES;
+guessingrows = 2147483647;
+RUN;
+
+
+/* 1.1b - Renaming variables as required  */
+Data Rad1b;
+	Format MB2018Code X Y;
+	set Rad1a;
+	keep MB2018Code X Y;
+	rename MB2018Code = MB2018_Code;
+	rename X = Node_Long;
+	rename Y = node_Lat;
+run;
+
+proc sort data = Rad1b;
+	by MB2018_Code;
+run;
+
+
+
+
+/* 1.2a - Read in the meshblock centroids data set */
+FILENAME REFFILE "\\dot-sv1\Paper_Napkin\Haylem Rayner\Public Transport Folder\Data\AAA Final Data Sets\Miscellaneous\2018 Meshblock Centroids.csv";
+PROC IMPORT DATAFILE=REFFILE replace
+	DBMS=csv
+	OUT=WORK.Rad2a;
+	GETNAMES=YES;
+guessingrows = 2147483647;
+RUN;
+
+
+/* 1.2b - Rename variables as required */
+Data Rad2b;
+	set Rad2a;
+	rename ___MB2018_Code = MB2018_Code;
+	Rename Longitude = Cent_Long;
+	Rename Latitude  = Cent_Lat;
+run;
+
+proc sort data = Rad2b;
+	by MB2018_Code;
+run;
+
+
+
+
+
+/* 1.3a - Merge the previous two data sets together */
+Data Rad3a;
+	Merge Rad1b Rad2b;
+	by MB2018_Code;
+	if Node_Long = . then delete;
+run;
+
+
+/* 1.3b - Calculate the geodetic distance between all pairs of centroids and associated nodes */
+Data Rad3b;
+	set Rad3a;
+	Dist = geodist(node_Lat, Node_Long, Cent_Lat, Cent_Long, 'D');
+run;
+
+
+/* 1.3c - Sort by Meshblock and DESCENDING geodetic distance */
+proc sort data = Rad3b out = Rad3c;
+	by MB2018_Code DESCENDING Dist;
+run;
+
+
+/* 1.3d - Refine to the centroid-node pair with the greatest geodetic distance for each meshblock */
+Data Rad3d;
+	set Rad3c;
+	count + 1;
+	by MB2018_Code;
+	if first.MB2018_Code then count = 1;
+	if Count ^=1 then delete;
+	drop Count;
+run;
+
+
+/* 1.3e - Refine to required variables */
+Data Rad3e;
+	set Rad3d;
+	drop Node_Long	node_Lat	Cent_Long	Cent_Lat;
+	rename Dist = Radius;
+run;
+
+
+
+
+
+
+/* 1.4a - Read in meshblock population data */
+Data Rad4a;
+	set Pop.AAA_MESHBLOCK_POPULATIONS_2018;
+	drop Census_Night_Population;
+	Rename UR_Population = Pop;
+run;
+
+proc sort data = Rad4a;
+	by MB2018_Code;
+run;
+
+
+
+/* 1.4b - Merge in meshblock population data */
+Data Rad4b;
+	Merge Rad3e Rad4a;
+	by MB2018_Code;
+	if Radius = . then delete;
+run;
+
+proc sort data = Rad4b;
+	by Radius;
+run;
+
+
+
+
+
+/* Section X */
+/*-----------------------------------------------------------------------------------------------------------------------*/
+/* Produce output data sets */
+
+/* X.1a - Produce output data set */
+Data AAA_Max_Error_Dist_by_MB;
+	set Rad4b;
+run;
+
+
+/* X.1b - Delete non-necessary data sets */
+proc datasets library=work nolist;
+	Save AAA_:;
+run;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

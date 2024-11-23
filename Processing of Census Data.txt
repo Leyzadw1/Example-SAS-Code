@@ -1,0 +1,1170 @@
+/* -----------------------------------------------------------------------------------------------------------------------
+                OVERVIEW
+		--------
+
+Project:       	Processing of Census Data
+
+Program Name:  	Processing_of_Census_Data.sas
+
+Summary:       	Processing of Census Data	 	 
+		On 16/12/2019 Stats NZ released PARTIAL data from the 2018 census. This data can be found on the webpage:
+		https://www.stats.govt.nz/information-releases/statistical-area-1-dataset-for-2018-census
+	
+		The data was downloaded (in both wide and long data formats) and placed in the folders:
+		\\XXXXXXXXXXXXXXXXXXXXXX\2018 Census Raw Data Download (20191217)\Wide Format Files
+		\\XXXXXXXXXXXXXXXXXXXXXX\2018 Census\2018 Census Raw Data Download (20191217)\Long Format Files
+	
+		In terms of the wide data formats, there are 5 data sets to process:
+			-	Individual_part1_totalNZ-wide_format		(Individual Part1)
+			-	Individual_part2_totalNZ-wide_format		(Individual Part2)
+			-	Individual_part3a_totalNZ-wide_format		(Individual Part3a)
+			-	Dwellings_totalNZ-wide_format			(Dwellings)
+			-	Households_totalNZ-wide_format			(Household)
+	
+		Data is provided at the following geographic levels:
+			-	SA1
+			-	SA2
+			-	WARD
+			-	DHB
+			-	COUNCIL BOARD (Auckland)
+			-	TA
+			-	REGIONAL COUNCIL
+		
+		In this program we process this census data and output it as a useable SAS file keeping with the conventions developed
+		when processing the 2013 census data (see \\XXXXXXXXXXXXXXXXXXXXXX\Census\datasets).
+
+Details:       	Section 0:
+               	Libnames, Pathways & Static Macros
+
+		Section 1:
+		Reading in the data and renaming variables where appropriate
+		
+		Section 2:
+		Creating a macro to reduce the number of variables by removing separate years 
+
+		Section 3:
+		Creating a macro to detail the geographic level of the data
+
+		Section 4:
+		SAS only allows variables to have a character length of 32 characters or below. Consequently, the majority of the 
+		variables in the current output sets are named incorrectly. Nevertheless, this information can be recovered from the SAS 
+		'Labels' associated to the variables. In this section we create a macro to rename all variables appropriately
+	
+		Section 5:
+		Creating a macro to convert all character variables to numeric
+
+		Section X:
+		Producing Permanent Output Data Sets
+		
+
+
+
+            	DEPENDENCIES AND LIMITATIONS
+		----------------------------
+
+Input(s):      	CSV data sets downloaded from Stats NZ website and located here:
+		\\XXXXXXXXXXXXXXXXXXXXXX\2018 Census Raw Data Download (20191217)\Wide Format Files
+		\\XXXXXXXXXXXXXXXXXXXXXX\2018 Census\2018 Census Raw Data Download (20191217)\Long Format Files
+
+Output(s):     	output.INDIVIDUAL_PART1
+		output.INDIVIDUAL_PART2
+		output.INDIVIDUAL_PART3A
+		output.Dwellings
+		output.Household
+		Output.AAA_DATA_DICTIONARY
+
+Dependencies:  	NA
+
+Limitations:   	NA
+
+
+
+
+
+
+
+
+/* Section 0 */
+/*-----------------------------------------------------------------------------------------------------------------------*/
+/* Libnames, Pathways & Static Macros  */
+
+/* Libnames */
+libname Output "\\dot-sv1\DEV\Data Products\Census\2018 Census\Output";
+
+
+/* Pathways */
+
+
+/* Static Macros */
+
+
+
+
+
+
+/* Section 1 */
+/*-----------------------------------------------------------------------------------------------------------------------*/
+/* Reading in the data and renaming variables where appropriate  */
+
+/* 1.1 - Reading in all the relevant data sets */
+FILENAME REFFILE "XXXXXXXXXXXXXXXXXXXXXXX\Census\2018 Census\2018 Census Raw Data Download (20191217)\Wide Format Files\Individual_part1_totalNZ-wide_format.csv";
+PROC IMPORT DATAFILE=REFFILE replace
+	DBMS=csv
+	OUT=WORK.ZZZ_IndP1;
+	GETNAMES=YES;
+guessingrows = 2147483647;
+RUN;
+
+Data ZZZ_IndP1;
+	set ZZZ_IndP1;
+	Rename 	_2006_Census_Age__single_year_of = Census_2006_Age_Single_Year_of;
+	Rename	_2013_Census_Age__single_year_of = Census_2013_Age_Single_Year_of;
+	Rename	_2018_Census_Age__single_year_of = Census_2018_Age_Single_Year_of;
+run;
+
+
+FILENAME REFFILE "XXXXXXXXXXXXXXXXXXXXXXX\Census\2018 Census\2018 Census Raw Data Download (20191217)\Wide Format Files\Individual_part2_totalNZ-wide_format.csv";
+PROC IMPORT DATAFILE=REFFILE replace
+	DBMS=csv
+	OUT=WORK.ZZZ_IndP2;
+	GETNAMES=YES;
+guessingrows = 2147483647;
+RUN;
+
+
+FILENAME REFFILE "XXXXXXXXXXXXXXXXXXXXXXX\Census\2018 Census\2018 Census Raw Data Download (20191217)\Wide Format Files\Individual_part3a_totalNZ-wide_format.csv";
+PROC IMPORT DATAFILE=REFFILE replace
+	DBMS=csv
+	OUT=WORK.ZZZ_IndP3a;
+	GETNAMES=YES;
+guessingrows = 2147483647;
+RUN;
+
+
+FILENAME REFFILE "XXXXXXXXXXXXXXXXXXXXXXX\Census\2018 Census\2018 Census Raw Data Download (20191217)\Wide Format Files\Dwellings_totalNZ-wide_format.csv";
+PROC IMPORT DATAFILE=REFFILE replace
+	DBMS=csv
+	OUT=WORK.ZZZ_Dwell;
+	GETNAMES=YES;
+guessingrows = 2147483647;
+RUN;
+
+
+FILENAME REFFILE "XXXXXXXXXXXXXXXXXXXXXXX\Census\2018 Census\2018 Census Raw Data Download (20191217)\Wide Format Files\Households_totalNZ-wide_format.csv";
+PROC IMPORT DATAFILE=REFFILE replace
+	DBMS=csv
+	OUT=WORK.ZZZ_House;
+	GETNAMES=YES;
+guessingrows = 2147483647;
+RUN;
+
+
+
+
+
+
+
+
+/* Section 2 */
+/*-----------------------------------------------------------------------------------------------------------------------*/
+/* Creating a macro to reduce the number of variables by removing separate years  */
+
+/* 2.1 - Developing the macro */
+%macro Simplify(Data,Year);
+
+	/* 2.1a Refine to variables from the same year */
+	Data Ind1a;
+		Format Year;
+		set &Data;
+		Keep Area_code_and_description Area_Code Area_Description Year Census_&Year: ;
+		Year = &Year;
+	run;
+	
+	/* 2.1b - Refining to the ID variables only */ 
+	Data Ind1b;
+		set Ind1a;
+		keep Area_code_and_description Area_Code Area_Description Year;
+	run;
+	
+	/* 2.1c - Refining to the non-ID variables only */ 
+	Data Ind1c;
+		set Ind1a;
+		drop Area_code_and_description Area_Code Area_Description Year;
+	run;
+	
+	/* 2.1d - Removing the year prefix from the non-ID Variables */ 
+	proc sql noprint;
+		SELECT cats(NAME,"=",substr(NAME,12))
+		INTO :renames SEPARATED BY " "
+		FROM dictionary.columns
+		WHERE LIBNAME="WORK" AND MEMNAME="IND1C";
+	quit;
+	
+	Data Ind1d;
+		set Ind1c;
+		rename &renames;
+	run;
+	
+	/* 2.1e - Merging the ID and non_ID sets back together */ 
+	Data Ind1e;
+		Merge Ind1b Ind1d;
+	run;
+	
+	/* 2.2c - Appending data as required */
+	PROC APPEND BASE=Y_&Data 
+				DATA=Ind1e
+	FORCE;
+
+%mend;
+
+%Simplify(ZZZ_INDP1,2018);
+%Simplify(ZZZ_INDP1,2013);
+%Simplify(ZZZ_INDP1,2006);
+
+%Simplify(ZZZ_INDP2,2018);
+%Simplify(ZZZ_INDP2,2013);
+%Simplify(ZZZ_INDP2,2006);
+
+%Simplify(ZZZ_INDP3a,2018);
+%Simplify(ZZZ_INDP3a,2013);
+%Simplify(ZZZ_INDP3a,2006);
+
+%Simplify(ZZZ_DWELL,2018);
+%Simplify(ZZZ_DWELL,2013);
+%Simplify(ZZZ_DWELL,2006);
+
+%Simplify(ZZZ_HOUSE,2018);
+%Simplify(ZZZ_HOUSE,2013);
+%Simplify(ZZZ_HOUSE,2006);
+
+
+
+
+
+
+
+
+
+
+/* Section 3 */
+/*-----------------------------------------------------------------------------------------------------------------------*/
+/* Creating a macro to detail the geographic level of the data */
+
+/* 3.1 - Developing the macro */
+%macro Geog(DataSet);
+
+	/* 3.1a - Choosing the appropriate data set */
+	Data Geo1a;
+		set &DataSet;
+	run;
+
+	/* 3.1b - Removing the totals variables except the Regional Council Total */
+	Data Geo1b;
+		Format Year	Area_code_and_description	Area_Code Area_Description Code;
+		set Geo1a;
+		if Area_Code = "total" and Area_Description in (	"Total NZ (Statistical Area 1)",
+									"Total NZ (Statistical Area 2)",
+									"Total NZ (District Health Board)",
+									"Total NZ (Territorial Authority)",
+									"Total NZ (Ward)",
+									"Total NZ (Local Board Area (Auckland Region))") then delete;
+								
+		if Area_Code = "total" and Area_Description = "Total NZ (Regional Council)" then Area_Code = "909";
+
+		Code = input(Area_Code, 8.);
+	run;
+
+
+
+	/* 3.1c - Specifying the geography of each row */
+	Data Geo1c;
+		length Geo $ 100;
+		Format Year	Area_code_and_description	Area_Code Area_Description Code Geo;
+		set Geo1b;
+		
+		/* Dealing with SA1s */
+		if Code >= 7000000 and Code <= 7999916 then Geo = "SA1";
+		
+		/* Dealing with SA2s */
+		if Code >= 100100 and Code <= 400016 then Geo = "SA2";
+		
+		/* Dealing with WARDS  */
+		if Code = 101 and Area_Description = "Te Hiku Ward" then Geo = "WARD";
+		if Code = 102 and Area_Description = "Bay of Islands-Whangaroa Ward" then Geo = "WARD";
+		if Code = 103 and Area_Description = "Kaikohe-Hokianga Ward" then Geo = "WARD";
+		if Code = 201 and Area_Description = "Mangakahia-Maungatapere Ward" then Geo = "WARD";
+		if Code = 202 and Area_Description = "Hikurangi-Coastal Ward" then Geo = "WARD";
+		if Code = 203 and Area_Description = "Whangarei Heads Ward" then Geo = "WARD";
+		if Code = 204 and Area_Description = "Denby Ward" then Geo = "WARD";
+		if Code = 205 and Area_Description = "Okara Ward" then Geo = "WARD";
+		if Code = 206 and Area_Description = "Bream Bay Ward" then Geo = "WARD";
+		if Code = 301 and Area_Description = "Dargaville Ward" then Geo = "WARD";
+		if Code = 302 and Area_Description = "West Coast-Central Ward" then Geo = "WARD";
+		if Code = 303 and Area_Description = "Otamatea Ward" then Geo = "WARD";
+		if Code = 1101 and Area_Description = "Coromandel-Colville Ward" then Geo = "WARD";
+		if Code = 1102 and Area_Description = "Mercury Bay Ward" then Geo = "WARD";
+		if Code = 1103 and Area_Description = "Thames Ward" then Geo = "WARD";
+		if Code = 1104 and Area_Description = "South Eastern Ward" then Geo = "WARD";
+		if Code = 1201 and Area_Description = "Plains Ward" then Geo = "WARD";
+		if Code = 1202 and Area_Description = "Paeroa Ward" then Geo = "WARD";
+		if Code = 1203 and Area_Description = "Waihi Ward" then Geo = "WARD";
+		if Code = 1301 and Area_Description = "Awaroa ki Tuakau Ward" then Geo = "WARD";
+		if Code = 1302 and Area_Description = "Onewhero-Te Akau Ward" then Geo = "WARD";
+		if Code = 1303 and Area_Description = "Whangamarino Ward" then Geo = "WARD";
+		if Code = 1304 and Area_Description = "Hukanui-Waerenga Ward" then Geo = "WARD";
+		if Code = 1305 and Area_Description = "Eureka Ward" then Geo = "WARD";
+		if Code = 1306 and Area_Description = "Huntly Ward" then Geo = "WARD";
+		if Code = 1307 and Area_Description = "Ngaruawahia Ward" then Geo = "WARD";
+		if Code = 1308 and Area_Description = "Newcastle Ward" then Geo = "WARD";
+		if Code = 1309 and Area_Description = "Raglan Ward" then Geo = "WARD";
+		if Code = 1310 and Area_Description = "Tamahere Ward" then Geo = "WARD";
+		if Code = 1501 and Area_Description = "Morrinsville Ward" then Geo = "WARD";
+		if Code = 1502 and Area_Description = "Te Aroha Ward" then Geo = "WARD";
+		if Code = 1503 and Area_Description = "Matamata Ward" then Geo = "WARD";
+		if Code = 1601 and Area_Description = "West Ward" then Geo = "WARD";
+		if Code = 1602 and Area_Description = "East Ward" then Geo = "WARD";
+		if Code = 1701 and Area_Description = "Pirongia Ward" then Geo = "WARD";
+		if Code = 1702 and Area_Description = "Cambridge Ward" then Geo = "WARD";
+		if Code = 1703 and Area_Description = "Maungatautari Ward" then Geo = "WARD";
+		if Code = 1704 and Area_Description = "Te Awamutu Ward" then Geo = "WARD";
+		if Code = 1705 and Area_Description = "Kakepuku Ward" then Geo = "WARD";
+		if Code = 1801 and Area_Description = "Kawhia-Tihiroa Ward" then Geo = "WARD";
+		if Code = 1802 and Area_Description = "Waipa Ward" then Geo = "WARD";
+		if Code = 1803 and Area_Description = "Kiokio-Korakonui Ward" then Geo = "WARD";
+		if Code = 1804 and Area_Description = "Otorohanga Ward" then Geo = "WARD";
+		if Code = 1805 and Area_Description = "Wharepuhunga Ward" then Geo = "WARD";
+		if Code = 1901 and Area_Description = "Tirau Ward" then Geo = "WARD";
+		if Code = 1902 and Area_Description = "Putaruru Ward" then Geo = "WARD";
+		if Code = 1903 and Area_Description = "Tokoroa Ward" then Geo = "WARD";
+		if Code = 2001 and Area_Description = "Waitomo Rural Ward" then Geo = "WARD";
+		if Code = 2002 and Area_Description = "Te Kuiti Ward" then Geo = "WARD";
+		if Code = 2101 and Area_Description = "Mangakino-Pouakani Ward" then Geo = "WARD";
+		if Code = 2102 and Area_Description = "Taupo-Kaingaroa Ward" then Geo = "WARD";
+		if Code = 2103 and Area_Description = "Turangi-Tongariro Ward" then Geo = "WARD";
+		if Code = 2201 and Area_Description = "Katikati-Waihi Beach Ward" then Geo = "WARD";
+		if Code = 2202 and Area_Description = "Maketu-Te Puke Ward" then Geo = "WARD";
+		if Code = 2203 and Area_Description = "Kaimai Ward" then Geo = "WARD";
+		if Code = 2301 and Area_Description = "Mount Maunganui-Papamoa Ward" then Geo = "WARD";
+		if Code = 2302 and Area_Description = "Otumoetai-Pyes Pa Ward" then Geo = "WARD";
+		if Code = 2303 and Area_Description = "Te Papa-Welcome Bay Ward" then Geo = "WARD";
+		if Code = 2499 and Area_Description = "Area Outside Ward" then Geo = "WARD";
+		if Code = 2501 and Area_Description = "Rangitaiki Ward" then Geo = "WARD";
+		if Code = 2502 and Area_Description = "Whakatane-Ohope Ward" then Geo = "WARD";
+		if Code = 2503 and Area_Description = "Taneatua-Waimana Ward" then Geo = "WARD";
+		if Code = 2504 and Area_Description = "Galatea-Murupara Ward" then Geo = "WARD";
+		if Code = 2699 and Area_Description = "Area Outside Ward" then Geo = "WARD";
+		if Code = 2701 and Area_Description = "Coast Ward" then Geo = "WARD";
+		if Code = 2702 and Area_Description = "Waioeka-Waiotahi Ward" then Geo = "WARD";
+		if Code = 2703 and Area_Description = "Opotiki Ward" then Geo = "WARD";
+		if Code = 2801 and Area_Description = "Matakaoa-Waiapu Ward" then Geo = "WARD";
+		if Code = 2802 and Area_Description = "Waipaoa Ward" then Geo = "WARD";
+		if Code = 2803 and Area_Description = "Tawhiti-Uawa Ward" then Geo = "WARD";
+		if Code = 2804 and Area_Description = "Taruheru-Patutahi Ward" then Geo = "WARD";
+		if Code = 2805 and Area_Description = "Gisborne Ward" then Geo = "WARD";
+		if Code = 2999 and Area_Description = "Area Outside Ward" then Geo = "WARD";
+		if Code = 3001 and Area_Description = "Mohaka Ward" then Geo = "WARD";
+		if Code = 3002 and Area_Description = "Heretaunga Ward" then Geo = "WARD";
+		if Code = 3003 and Area_Description = "Hastings-Havelock North Ward" then Geo = "WARD";
+		if Code = 3004 and Area_Description = "Flaxmere Ward" then Geo = "WARD";
+		if Code = 3005 and Area_Description = "Kahuranaki Ward" then Geo = "WARD";
+		if Code = 3101 and Area_Description = "Ahuriri Ward" then Geo = "WARD";
+		if Code = 3102 and Area_Description = "Onekawa-Tamatea Ward" then Geo = "WARD";
+		if Code = 3103 and Area_Description = "Nelson Park Ward" then Geo = "WARD";
+		if Code = 3104 and Area_Description = "Taradale Ward" then Geo = "WARD";
+		if Code = 3201 and Area_Description = "Aramoana-Ruahine Ward" then Geo = "WARD";
+		if Code = 3202 and Area_Description = "Ruataniwha Ward" then Geo = "WARD";
+		if Code = 3301 and Area_Description = "New Plymouth City Ward" then Geo = "WARD";
+		if Code = 3302 and Area_Description = "North Ward" then Geo = "WARD";
+		if Code = 3303 and Area_Description = "South-West Ward" then Geo = "WARD";
+		if Code = 3401 and Area_Description = "Stratford Rural Ward" then Geo = "WARD";
+		if Code = 3402 and Area_Description = "Stratford Urban Ward" then Geo = "WARD";
+		if Code = 3501 and Area_Description = "Egmont Plains Ward" then Geo = "WARD";
+		if Code = 3502 and Area_Description = "Eltham Ward" then Geo = "WARD";
+		if Code = 3503 and Area_Description = "Tangahoe Ward" then Geo = "WARD";
+		if Code = 3504 and Area_Description = "Hawera-Normanby Ward" then Geo = "WARD";
+		if Code = 3505 and Area_Description = "Patea Ward" then Geo = "WARD";
+		if Code = 3601 and Area_Description = "Ohura Ward" then Geo = "WARD";
+		if Code = 3602 and Area_Description = "Taumarunui Ward" then Geo = "WARD";
+		if Code = 3603 and Area_Description = "National Park Ward" then Geo = "WARD";
+		if Code = 3604 and Area_Description = "Waimarino-Waiouru Ward" then Geo = "WARD";
+		if Code = 3799 and Area_Description = "Area Outside Ward" then Geo = "WARD";
+		if Code = 3801 and Area_Description = "Taihape Ward" then Geo = "WARD";
+		if Code = 3802 and Area_Description = "Hunterville Ward" then Geo = "WARD";
+		if Code = 3803 and Area_Description = "Bulls Ward" then Geo = "WARD";
+		if Code = 3804 and Area_Description = "Marton Ward" then Geo = "WARD";
+		if Code = 3805 and Area_Description = "Turakina Ward" then Geo = "WARD";
+		if Code = 3901 and Area_Description = "Northern Manawatu Rural Ward" then Geo = "WARD";
+		if Code = 3902 and Area_Description = "Southern Manawatu Rural Ward" then Geo = "WARD";
+		if Code = 3903 and Area_Description = "Feilding Ward" then Geo = "WARD";
+		if Code = 4099 and Area_Description = "Area Outside Ward" then Geo = "WARD";
+		if Code = 4101 and Area_Description = "North Tararua Ward" then Geo = "WARD";
+		if Code = 4102 and Area_Description = "South Tararua Ward" then Geo = "WARD";
+		if Code = 4201 and Area_Description = "Kere Kere Ward" then Geo = "WARD";
+		if Code = 4202 and Area_Description = "Miranui Ward" then Geo = "WARD";
+		if Code = 4203 and Area_Description = "Levin Ward" then Geo = "WARD";
+		if Code = 4204 and Area_Description = "Waiopehu Ward" then Geo = "WARD";
+		if Code = 4301 and Area_Description = "Otaki Ward" then Geo = "WARD";
+		if Code = 4302 and Area_Description = "Paraparaumu Ward" then Geo = "WARD";
+		if Code = 4303 and Area_Description = "Waikanae Ward" then Geo = "WARD";
+		if Code = 4304 and Area_Description = "Paekakariki-Raumati Ward" then Geo = "WARD";
+		if Code = 4401 and Area_Description = "Northern Ward" then Geo = "WARD";
+		if Code = 4402 and Area_Description = "Western Ward" then Geo = "WARD";
+		if Code = 4403 and Area_Description = "Eastern Ward" then Geo = "WARD";
+		if Code = 4599 and Area_Description = "Area Outside Ward" then Geo = "WARD";
+		if Code = 4601 and Area_Description = "Western Ward" then Geo = "WARD";
+		if Code = 4602 and Area_Description = "Harbour Ward" then Geo = "WARD";
+		if Code = 4603 and Area_Description = "Northern Ward" then Geo = "WARD";
+		if Code = 4604 and Area_Description = "Central Ward" then Geo = "WARD";
+		if Code = 4605 and Area_Description = "Eastern Ward" then Geo = "WARD";
+		if Code = 4606 and Area_Description = "Wainuiomata Ward" then Geo = "WARD";
+		if Code = 4701 and Area_Description = "Northern Ward" then Geo = "WARD";
+		if Code = 4702 and Area_Description = "Onslow-Western Ward" then Geo = "WARD";
+		if Code = 4703 and Area_Description = "Lambton Ward" then Geo = "WARD";
+		if Code = 4704 and Area_Description = "Eastern Ward" then Geo = "WARD";
+		if Code = 4705 and Area_Description = "Southern Ward" then Geo = "WARD";
+		if Code = 4801 and Area_Description = "Rural Ward" then Geo = "WARD";
+		if Code = 4802 and Area_Description = "Urban Ward" then Geo = "WARD";
+		if Code = 4999 and Area_Description = "Area Outside Ward" then Geo = "WARD";
+		if Code = 5001 and Area_Description = "Greytown Ward" then Geo = "WARD";
+		if Code = 5002 and Area_Description = "Featherston Ward" then Geo = "WARD";
+		if Code = 5003 and Area_Description = "Martinborough Ward" then Geo = "WARD";
+		if Code = 5101 and Area_Description = "Golden Bay Ward" then Geo = "WARD";
+		if Code = 5102 and Area_Description = "Lakes-Murchison Ward" then Geo = "WARD";
+		if Code = 5103 and Area_Description = "Moutere-Waimea Ward" then Geo = "WARD";
+		if Code = 5104 and Area_Description = "Motueka Ward" then Geo = "WARD";
+		if Code = 5105 and Area_Description = "Richmond Ward" then Geo = "WARD";
+		if Code = 5299 and Area_Description = "Area Outside Ward" then Geo = "WARD";
+		if Code = 5301 and Area_Description = "Marlborough Sounds Ward" then Geo = "WARD";
+		if Code = 5302 and Area_Description = "Wairau-Awatere Ward" then Geo = "WARD";
+		if Code = 5303 and Area_Description = "Blenheim Ward" then Geo = "WARD";
+		if Code = 5499 and Area_Description = "Area Outside Ward" then Geo = "WARD";
+		if Code = 5501 and Area_Description = "Seddon Ward" then Geo = "WARD";
+		if Code = 5502 and Area_Description = "Inangahua Ward" then Geo = "WARD";
+		if Code = 5503 and Area_Description = "Westport Ward" then Geo = "WARD";
+		if Code = 5601 and Area_Description = "Northern Ward" then Geo = "WARD";
+		if Code = 5602 and Area_Description = "Central Ward" then Geo = "WARD";
+		if Code = 5603 and Area_Description = "Southern Ward" then Geo = "WARD";
+		if Code = 5604 and Area_Description = "Eastern Ward" then Geo = "WARD";
+		if Code = 5701 and Area_Description = "Northern Ward" then Geo = "WARD";
+		if Code = 5702 and Area_Description = "Hokitika Ward" then Geo = "WARD";
+		if Code = 5703 and Area_Description = "Southern Ward" then Geo = "WARD";
+		if Code = 5801 and Area_Description = "Hanmer Springs Ward" then Geo = "WARD";
+		if Code = 5802 and Area_Description = "Amuri-Hurunui Ward" then Geo = "WARD";
+		if Code = 5803 and Area_Description = "Cheviot Ward" then Geo = "WARD";
+		if Code = 5804 and Area_Description = "Glenmark Ward" then Geo = "WARD";
+		if Code = 5805 and Area_Description = "Amberley Ward" then Geo = "WARD";
+		if Code = 5901 and Area_Description = "Oxford-Ohoka Ward" then Geo = "WARD";
+		if Code = 5902 and Area_Description = "Rangiora-Ashley Ward" then Geo = "WARD";
+		if Code = 5903 and Area_Description = "Kaiapoi-Woodend Ward" then Geo = "WARD";
+		if Code = 6001 and Area_Description = "Harewood Ward" then Geo = "WARD";
+		if Code = 6002 and Area_Description = "Waimairi Ward" then Geo = "WARD";
+		if Code = 6003 and Area_Description = "Papanui Ward" then Geo = "WARD";
+		if Code = 6004 and Area_Description = "Fendalton Ward" then Geo = "WARD";
+		if Code = 6005 and Area_Description = "Innes Ward" then Geo = "WARD";
+		if Code = 6006 and Area_Description = "Burwood Ward" then Geo = "WARD";
+		if Code = 6007 and Area_Description = "Coastal Ward" then Geo = "WARD";
+		if Code = 6008 and Area_Description = "Hornby Ward" then Geo = "WARD";
+		if Code = 6009 and Area_Description = "Halswell Ward" then Geo = "WARD";
+		if Code = 6010 and Area_Description = "Riccarton Ward" then Geo = "WARD";
+		if Code = 6011 and Area_Description = "Spreydon Ward" then Geo = "WARD";
+		if Code = 6012 and Area_Description = "Central Ward" then Geo = "WARD";
+		if Code = 6013 and Area_Description = "Cashmere Ward" then Geo = "WARD";
+		if Code = 6014 and Area_Description = "Linwood Ward" then Geo = "WARD";
+		if Code = 6015 and Area_Description = "Heathcote Ward" then Geo = "WARD";
+		if Code = 6016 and Area_Description = "Banks Peninsula Ward" then Geo = "WARD";
+		if Code = 6201 and Area_Description = "Malvern Ward" then Geo = "WARD";
+		if Code = 6202 and Area_Description = "Selwyn Central Ward" then Geo = "WARD";
+		if Code = 6203 and Area_Description = "Ellesmere Ward" then Geo = "WARD";
+		if Code = 6204 and Area_Description = "Springs Ward" then Geo = "WARD";
+		if Code = 6301 and Area_Description = "Western Ward" then Geo = "WARD";
+		if Code = 6302 and Area_Description = "Eastern Ward" then Geo = "WARD";
+		if Code = 6303 and Area_Description = "Ashburton Ward" then Geo = "WARD";
+		if Code = 6401 and Area_Description = "Geraldine Ward" then Geo = "WARD";
+		if Code = 6402 and Area_Description = "Pleasant Point-Temuka Ward" then Geo = "WARD";
+		if Code = 6403 and Area_Description = "Timaru Ward" then Geo = "WARD";
+		if Code = 6501 and Area_Description = "Pukaki Ward" then Geo = "WARD";
+		if Code = 6502 and Area_Description = "Opuha Ward" then Geo = "WARD";
+		if Code = 6601 and Area_Description = "Hakataramea-Waihaorunga Ward" then Geo = "WARD";
+		if Code = 6602 and Area_Description = "Pareora-Otaio-Makikihi Ward" then Geo = "WARD";
+		if Code = 6603 and Area_Description = "Lower Waihao Ward" then Geo = "WARD";
+		if Code = 6604 and Area_Description = "Waimate Ward" then Geo = "WARD";
+		if Code = 6799 and Area_Description = "Area Outside Ward" then Geo = "WARD";
+		if Code = 6801 and Area_Description = "Ahuriri Ward" then Geo = "WARD";
+		if Code = 6802 and Area_Description = "Oamaru Ward" then Geo = "WARD";
+		if Code = 6803 and Area_Description = "Waihemo Ward" then Geo = "WARD";
+		if Code = 6804 and Area_Description = "Corriedale Ward" then Geo = "WARD";
+		if Code = 6901 and Area_Description = "Cromwell Ward" then Geo = "WARD";
+		if Code = 6902 and Area_Description = "Earnscleugh-Manuherikia Ward" then Geo = "WARD";
+		if Code = 6903 and Area_Description = "Maniototo Ward" then Geo = "WARD";
+		if Code = 6904 and Area_Description = "Alexandra Ward" then Geo = "WARD";
+		if Code = 6905 and Area_Description = "Teviot Valley Ward" then Geo = "WARD";
+		if Code = 7001 and Area_Description = "Queenstown-Wakatipu Ward" then Geo = "WARD";
+		if Code = 7002 and Area_Description = "Wanaka Ward" then Geo = "WARD";
+		if Code = 7003 and Area_Description = "Arrowtown Ward" then Geo = "WARD";
+		if Code = 7199 and Area_Description = "Area Outside Ward" then Geo = "WARD";
+		if Code = 7201 and Area_Description = "West Otago Ward" then Geo = "WARD";
+		if Code = 7202 and Area_Description = "Clinton Ward" then Geo = "WARD";
+		if Code = 7203 and Area_Description = "Lawrence-Tuapeka Ward" then Geo = "WARD";
+		if Code = 7204 and Area_Description = "Balclutha Ward" then Geo = "WARD";
+		if Code = 7205 and Area_Description = "Catlins Ward" then Geo = "WARD";
+		if Code = 7206 and Area_Description = "Bruce Ward" then Geo = "WARD";
+		if Code = 7207 and Area_Description = "Kaitangata-Matau Ward" then Geo = "WARD";
+		if Code = 7208 and Area_Description = "Clutha Valley Ward" then Geo = "WARD";
+		if Code = 7301 and Area_Description = "Mararoa-Waimea Ward" then Geo = "WARD";
+		if Code = 7302 and Area_Description = "Waiau-Aparima Ward" then Geo = "WARD";
+		if Code = 7303 and Area_Description = "Winton-Wallacetown Ward" then Geo = "WARD";
+		if Code = 7304 and Area_Description = "Waihopai-Toetoes Ward" then Geo = "WARD";
+		if Code = 7305 and Area_Description = "Stewart Island/Rakiura Ward" then Geo = "WARD";
+		if Code = 7401 and Area_Description = "Waikaka Ward" then Geo = "WARD";
+		if Code = 7402 and Area_Description = "Kaiwera-Waimumu Ward" then Geo = "WARD";
+		if Code = 7403 and Area_Description = "Gore Ward" then Geo = "WARD";
+		if Code = 7404 and Area_Description = "Mataura Ward" then Geo = "WARD";
+		if Code = 7599 and Area_Description = "Area Outside Ward" then Geo = "WARD";
+		if Code = 7601 and Area_Description = "Rodney Ward" then Geo = "WARD";
+		if Code = 7602 and Area_Description = "Albany Ward" then Geo = "WARD";
+		if Code = 7603 and Area_Description = "North Shore Ward" then Geo = "WARD";
+		if Code = 7604 and Area_Description = "Waitakere Ward" then Geo = "WARD";
+		if Code = 7605 and Area_Description = "Waitemata and Gulf Ward" then Geo = "WARD";
+		if Code = 7606 and Area_Description = "Whau Ward" then Geo = "WARD";
+		if Code = 7607 and Area_Description = "Albert-Eden-Roskill Ward" then Geo = "WARD";
+		if Code = 7608 and Area_Description = "Orakei Ward" then Geo = "WARD";
+		if Code = 7609 and Area_Description = "Maungakiekie-Tamaki Ward" then Geo = "WARD";
+		if Code = 7610 and Area_Description = "Howick Ward" then Geo = "WARD";
+		if Code = 7611 and Area_Description = "Manukau Ward" then Geo = "WARD";
+		if Code = 7612 and Area_Description = "Manurewa-Papakura Ward" then Geo = "WARD";
+		if Code = 7613 and Area_Description = "Franklin Ward" then Geo = "WARD";
+		if Code = 99999 and Area_Description = "Area Outside Ward" then Geo = "WARD";
+
+		/* Dealing with Council Boards  */
+		if Code = 7601 and Area_Description = "Rodney Local Board Area" then Geo = "COUNCIL BOARD";
+		if Code = 7602 and Area_Description = "Hibiscus and Bays Local Board Area" then Geo = "COUNCIL BOARD";
+		if Code = 7603 and Area_Description = "Upper Harbour Local Board Area" then Geo = "COUNCIL BOARD";
+		if Code = 7604 and Area_Description = "Kaipatiki Local Board Area" then Geo = "COUNCIL BOARD";
+		if Code = 7605 and Area_Description = "Devonport-Takapuna Local Board Area" then Geo = "COUNCIL BOARD";
+		if Code = 7606 and Area_Description = "Henderson-Massey Local Board Area" then Geo = "COUNCIL BOARD";
+		if Code = 7607 and Area_Description = "Waitakere Ranges Local Board Area" then Geo = "COUNCIL BOARD";
+		if Code = 7608 and Area_Description = "Great Barrier Local Board Area" then Geo = "COUNCIL BOARD";
+		if Code = 7609 and Area_Description = "Waiheke Local Board Area" then Geo = "COUNCIL BOARD";
+		if Code = 7610 and Area_Description = "Waitemata Local Board Area" then Geo = "COUNCIL BOARD";
+		if Code = 7611 and Area_Description = "Whau Local Board Area" then Geo = "COUNCIL BOARD";
+		if Code = 7612 and Area_Description = "Albert-Eden Local Board Area" then Geo = "COUNCIL BOARD";
+		if Code = 7613 and Area_Description = "Puketapapa Local Board Area" then Geo = "COUNCIL BOARD";
+		if Code = 7614 and Area_Description = "Orakei Local Board Area" then Geo = "COUNCIL BOARD";
+		if Code = 7615 and Area_Description = "Maungakiekie-Tamaki Local Board Area" then Geo = "COUNCIL BOARD";
+		if Code = 7616 and Area_Description = "Howick Local Board Area" then Geo = "COUNCIL BOARD";
+		if Code = 7617 and Area_Description = "Mangere-Otahuhu Local Board Area" then Geo = "COUNCIL BOARD";
+		if Code = 7618 and Area_Description = "Otara-Papatoetoe Local Board Area" then Geo = "COUNCIL BOARD";
+		if Code = 7619 and Area_Description = "Manurewa Local Board Area" then Geo = "COUNCIL BOARD";
+		if Code = 7620 and Area_Description = "Papakura Local Board Area" then Geo = "COUNCIL BOARD";
+		if Code = 7621 and Area_Description = "Franklin Local Board Area" then Geo = "COUNCIL BOARD";
+		
+		/* Dealing with DHBs  */
+		if Code = 1 and Area_Description = "Northland" then Geo = "DHB";
+		if Code = 2 and Area_Description = "Waitemata" then Geo = "DHB";
+		if Code = 3 and Area_Description = "Auckland" then Geo = "DHB";
+		if Code = 4 and Area_Description = "Counties Manukau" then Geo = "DHB";
+		if Code = 5 and Area_Description = "Waikato" then Geo = "DHB";
+		if Code = 6 and Area_Description = "Lakes" then Geo = "DHB";
+		if Code = 7 and Area_Description = "Bay of Plenty" then Geo = "DHB";
+		if Code = 8 and Area_Description = "Tairawhiti" then Geo = "DHB";
+		if Code = 9 and Area_Description = "Taranaki" then Geo = "DHB";
+		if Code = 10 and Area_Description = "Hawke's Bay" then Geo = "DHB";
+		if Code = 11 and Area_Description = "Whanganui" then Geo = "DHB";
+		if Code = 12 and Area_Description = "MidCentral" then Geo = "DHB";
+		if Code = 13 and Area_Description = "Hutt Valley" then Geo = "DHB";
+		if Code = 14 and Area_Description = "Capital and Coast" then Geo = "DHB";
+		if Code = 15 and Area_Description = "Wairarapa" then Geo = "DHB";
+		if Code = 16 and Area_Description = "Nelson Marlborough" then Geo = "DHB";
+		if Code = 17 and Area_Description = "West Coast" then Geo = "DHB";
+		if Code = 18 and Area_Description = "Canterbury" then Geo = "DHB";
+		if Code = 19 and Area_Description = "South Canterbury" then Geo = "DHB";
+		if Code = 22 and Area_Description = "Southern" then Geo = "DHB";
+		if Code = 99 and Area_Description = "Area Outside District Health Board" then Geo = "DHB";
+		
+		/* Dealing with Regional Councils  */
+		if Code = 1 and Area_Description = "Northland Region" then Geo = "REGIONAL COUNCIL";
+		if Code = 2 and Area_Description = "Auckland Region" then Geo = "REGIONAL COUNCIL";
+		if Code = 3 and Area_Description = "Waikato Region" then Geo = "REGIONAL COUNCIL";
+		if Code = 4 and Area_Description = "Bay of Plenty Region" then Geo = "REGIONAL COUNCIL";
+		if Code = 5 and Area_Description = "Gisborne Region" then Geo = "REGIONAL COUNCIL";
+		if Code = 6 and Area_Description = "Hawke's Bay Region" then Geo = "REGIONAL COUNCIL";
+		if Code = 7 and Area_Description = "Taranaki Region" then Geo = "REGIONAL COUNCIL";
+		if Code = 8 and Area_Description = "Manawatu-Wanganui Region" then Geo = "REGIONAL COUNCIL";
+		if Code = 9 and Area_Description = "Wellington Region" then Geo = "REGIONAL COUNCIL";
+		if Code = 12 and Area_Description = "West Coast Region" then Geo = "REGIONAL COUNCIL";
+		if Code = 13 and Area_Description = "Canterbury Region" then Geo = "REGIONAL COUNCIL";
+		if Code = 14 and Area_Description = "Otago Region" then Geo = "REGIONAL COUNCIL";
+		if Code = 15 and Area_Description = "Southland Region" then Geo = "REGIONAL COUNCIL";
+		if Code = 16 and Area_Description = "Tasman Region" then Geo = "REGIONAL COUNCIL";
+		if Code = 17 and Area_Description = "Nelson Region" then Geo = "REGIONAL COUNCIL";
+		if Code = 18 and Area_Description = "Marlborough Region" then Geo = "REGIONAL COUNCIL";
+		if Code = 99 and Area_Description = "Area Outside Region" then Geo = "REGIONAL COUNCIL";
+		
+		/* Dealing with TAs */
+		if Code = 1 and Area_Description = "Far North District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 2 and Area_Description = "Whangarei District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 3 and Area_Description = "Kaipara District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 11 and Area_Description = "Thames-Coromandel District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 12 and Area_Description = "Hauraki District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 13 and Area_Description = "Waikato District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 15 and Area_Description = "Matamata-Piako District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 16 and Area_Description = "Hamilton City" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 17 and Area_Description = "Waipa District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 18 and Area_Description = "Otorohanga District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 19 and Area_Description = "South Waikato District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 20 and Area_Description = "Waitomo District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 21 and Area_Description = "Taupo District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 22 and Area_Description = "Western Bay of Plenty District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 23 and Area_Description = "Tauranga City" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 24 and Area_Description = "Rotorua District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 25 and Area_Description = "Whakatane District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 26 and Area_Description = "Kawerau District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 27 and Area_Description = "Opotiki District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 28 and Area_Description = "Gisborne District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 29 and Area_Description = "Wairoa District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 30 and Area_Description = "Hastings District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 31 and Area_Description = "Napier City" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 32 and Area_Description = "Central Hawke's Bay District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 33 and Area_Description = "New Plymouth District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 34 and Area_Description = "Stratford District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 35 and Area_Description = "South Taranaki District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 36 and Area_Description = "Ruapehu District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 37 and Area_Description = "Whanganui District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 38 and Area_Description = "Rangitikei District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 39 and Area_Description = "Manawatu District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 40 and Area_Description = "Palmerston North City" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 41 and Area_Description = "Tararua District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 42 and Area_Description = "Horowhenua District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 43 and Area_Description = "Kapiti Coast District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 44 and Area_Description = "Porirua City" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 45 and Area_Description = "Upper Hutt City" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 46 and Area_Description = "Lower Hutt City" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 47 and Area_Description = "Wellington City" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 48 and Area_Description = "Masterton District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 49 and Area_Description = "Carterton District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 50 and Area_Description = "South Wairarapa District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 51 and Area_Description = "Tasman District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 52 and Area_Description = "Nelson City" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 53 and Area_Description = "Marlborough District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 54 and Area_Description = "Kaikoura District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 55 and Area_Description = "Buller District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 56 and Area_Description = "Grey District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 57 and Area_Description = "Westland District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 58 and Area_Description = "Hurunui District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 59 and Area_Description = "Waimakariri District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 60 and Area_Description = "Christchurch City" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 62 and Area_Description = "Selwyn District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 63 and Area_Description = "Ashburton District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 64 and Area_Description = "Timaru District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 65 and Area_Description = "Mackenzie District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 66 and Area_Description = "Waimate District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 67 and Area_Description = "Chatham Islands Territory" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 68 and Area_Description = "Waitaki District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 69 and Area_Description = "Central Otago District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 70 and Area_Description = "Queenstown-Lakes District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 71 and Area_Description = "Dunedin City" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 72 and Area_Description = "Clutha District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 73 and Area_Description = "Southland District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 74 and Area_Description = "Gore District" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 75 and Area_Description = "Invercargill City" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 76 and Area_Description = "Auckland" then Geo = "TERRITORIAL AUTHORITY";
+		if Code = 999 and Area_Description = "Area Outside Territorial Authority" then Geo = "TERRITORIAL AUTHORITY";
+		
+		/* All NZ */
+		if Code = 909 and Area_Description = "Total NZ (Regional Council)" then Geo = "ALL NZ";
+	run;
+		
+		
+		
+	/* 3.1d - Tidying the result */
+	Data Geo1d;
+		Format Year Geo	Code Dummy Geo_Label Area_code_and_description	Area_Code	Area_Description;
+		set Geo1c;
+		Dummy = input(Area_code_and_description, 8.);
+		if Dummy  = . then Geo_Label = Area_Description;
+		if Dummy ^= . then Geo_Label = "";
+	run;
+
+	/* 3.1e - Dropping variables */
+	Data Geo1e;
+		set Geo1d;
+		drop Dummy	Area_code_and_description	Area_Code	Area_Description;
+	run;
+	
+	/* 3.1f - Sorting the data appropriately */
+	proc sort data = Geo1e out = Geo1f;
+		by  Geo Code DESCENDING YEAR;
+	run;
+	
+	/* 3.1g - Producing output data sets */
+	Data X_&DataSet;
+		set Geo1f;
+	run;
+		
+%mend;
+
+%Geog(Y_ZZZ_INDP1);
+%Geog(Y_ZZZ_INDP2);
+%Geog(Y_ZZZ_INDP3a);
+%Geog(Y_ZZZ_DWELL);
+%Geog(Y_ZZZ_HOUSE);
+
+
+
+
+
+
+
+
+
+/* Section 4 */
+/*-----------------------------------------------------------------------------------------------------------------------*/
+/* SAS only allows variables to have a character length of 32 characters or below. Consequently, the majority of the 
+variables in the current output sets are named incorrectly. Nevertheless, this information can be recovered from the SAS 
+'Labels' associated to the variables. In this section we create a macro to rename all variables appropriately */
+
+/* 4.1 - Developing a macro to produce a list of all variables and the corresponding label */
+Data Name1;
+	Data_Set	=	"XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";	
+	Variable	=	"XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
+	label		=	"XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
+run;
+
+%Macro Name(Datz);
+
+	/* 4.1a - Choosing the relevant data set */
+	Data Name1a;
+		set &Datz;
+	run;
+	
+	/* 4.1b - Choosing the relevant variable and label descriptors */
+	Data Name1b;
+		set Sashelp.VCOLUMN;
+		if memname ^= "&Datz" then delete;
+		keep memname name label;
+		Rename memname = Data_Set;
+		Rename name = Variable;
+	run;
+	
+	/* 4.1c - Tidying the result */
+	Data Name1c;
+		set Name1b;
+		if Label = "" then Label = Variable;
+		if label = "2018_Census_Age..single_year_of_age_Median_CURP" then label = "Census_2018_Age..single_year_of_age_Median_CURP";
+	run;
+	
+	/* 4.1d - Appending to the Name1 data set */
+	Data Name1;
+		Set Name1 Name1c;
+	run;
+	
+%mend;
+
+%Name(X_Y_ZZZ_INDP1);
+%Name(X_Y_ZZZ_INDP2);
+%Name(X_Y_ZZZ_INDP3A);
+%Name(X_Y_ZZZ_DWELL);
+%Name(X_Y_ZZZ_HOUSE);
+
+Data Name1;
+	set Name1;
+	if _N_ = 1 then delete;
+run;
+
+
+
+
+/* 4.2 - Reading in the data dictionary produced by analyzing the data set above */
+FILENAME REFFILE "\\dot-sv1\DEV\Data Products\Census\2018 Census\Miscellaneous\Data Dictionary.csv";
+PROC IMPORT DATAFILE=REFFILE replace
+	DBMS=csv
+	OUT=WORK.Name2a;
+	GETNAMES=YES;
+guessingrows = 2147483647;
+RUN;
+
+Data Name2a;
+	set Name2a;
+	drop label length;
+run;
+
+
+
+
+/* 4.3 - Creating a macro to rename variables as approriate  */
+%macro Rename(Datp);
+
+	/* 4.3a - Choosing the correct data set */
+	Data Name3a;
+		set &Datp;
+	run;
+
+	/* 4.3b - Refining the data dictionary to the required data set */
+	Data Name3b;
+		set Name2a;
+		if Data_set ^= "&Datp" then delete;
+	run;
+	
+	Data Name3b;
+		Format Order;
+		set Name3b;
+		Order = _N_;
+	run;
+	
+	
+	/* 4.3c - Setting the number of variables as a macro variable */
+	Data Name3c;
+		set Name3b;
+		keep Order;
+	run;
+	
+	proc sort data = Name3c;
+		by DESCENDING Order;
+	run;
+	
+	Data Name3c;
+		set Name3c;
+		if _N_ ^=1 then delete;
+	run;
+	
+	Data Name3c;
+		set Name3c;
+		Call symput('MaxOrder', Order);
+	run;	
+	
+	
+	/* 4.3d - Creating a sub-macro to do the renaming */
+	%macro SubRename;
+		%do i=1 %to &MaxOrder;
+		
+		/* 4.3d1 - Refining to the variable we want to rename */
+		Data Name3d1;
+			set Name3b;
+			if Order ^= &i then delete;
+			keep variable Var;
+		run;
+		
+		/* 4.3d2 - Setting the old and new variable names as a macro variables */
+		Data Name3d2;
+			set Name3d1;
+			Call symput('Old', Variable);
+			Call symput('New', Var);
+		run;
+		
+		/* 4.3d3 - Renaming the variable in the required data set */
+		Data Name3d3;
+			set Name3a;
+			Rename &Old = &New;
+		run;
+		
+		/* 4.3d4 - Overwriting the Name3a data set */
+		Data Name3a;
+			set Name3d3;
+		run;
+		
+		%end;
+	%mend;
+	
+	%SubRename;
+	
+	
+	/* 4.3e - Producing a results output set */
+	Data W_&Datp;
+		set Name3a;
+	run;
+	
+%mend;
+
+
+%Rename(X_Y_ZZZ_INDP1);
+%Rename(X_Y_ZZZ_INDP2);
+%Rename(X_Y_ZZZ_INDP3A);
+%Rename(X_Y_ZZZ_DWELL);
+%Rename(X_Y_ZZZ_HOUSE);
+
+
+
+
+
+
+/* 4.4 - Creating a data dictionary  */
+FILENAME REFFILE "XXXXXXXXXXXXXXXXXXXXXXX\Census\2018 Census\Miscellaneous\Data Dictionary.csv";
+PROC IMPORT DATAFILE=REFFILE replace
+	DBMS=csv
+	OUT=WORK.Dic1a;
+	GETNAMES=YES;
+guessingrows = 2147483647;
+RUN;
+
+Data Dic1b;
+	length Census_Data_Set $ 100;
+	set Dic1a;
+	drop Variable Length Data_Set;
+	Rename Label = Stats_NZ_Variable_Name;
+	Rename Var = DOT_Variable;
+	if Data_Set = "X_Y_ZZZ_INDP1" then Census_Data_Set = "INDIVIDUAL PART 1";
+	if Data_Set = "X_Y_ZZZ_INDP2" then Census_Data_Set = "INDIVIDUAL PART 2";
+	if Data_Set = "X_Y_ZZZ_INDP3A" then Census_Data_Set = "INDIVIDUAL PART 3A";
+	if Data_Set = "X_Y_ZZZ_DWELL" then Census_Data_Set = "DWELLINGS";
+	if Data_Set = "X_Y_ZZZ_HOUSE" then Census_Data_Set = "HOUSEHOLD";
+run;
+
+Data AAA_DATA_DICTIONARY;
+	set Dic1b;
+run;
+
+
+
+
+
+
+
+
+/* Section 5 */
+/*-----------------------------------------------------------------------------------------------------------------------*/
+/* Creating a macro to convert all character variables to numeric */
+
+
+/* 5.1 - Developing the macro */
+%macro Convert(Dat);
+
+	/* 5.1a - Choosing the relevant data set */
+	Data Conv1a;
+		Format Order;
+		set &Dat;
+		Order = _N_;
+	run;
+
+	/* 5.1b - Refining to ID variables only */
+	Data Conv1b;
+		set Conv1a;
+		Keep Order	Year	Geo	Code	GEO_Label;
+	run;
+	
+	
+	/* 5.1c - Refining to non-ID variables */
+	Data Conv1c;
+		set Conv1a;
+		drop Year	Geo	Code	GEO_Label;
+	run;
+	
+	
+	/* 5.1d - Creating a list of variables to convert to numeric */
+	Data Conv1d;
+		set Sashelp.VCOLUMN;
+		if memname ^= "CONV1C" then delete;
+		keep name;
+		Rename name = Var;
+	run;
+	
+	Data Conv1d;
+		Format Iteration;
+		set Conv1d;
+		Iteration = _N_;
+	run;
+
+
+	/* 5.1e - Setting the number of variables as a macro */
+	proc sort data = Conv1d out = Conv1e;
+		by DESCENDING Iteration;
+	run;
+	
+	Data Conv1e;
+		set Conv1e;
+		keep Iteration;
+		if _N_ ^=1 then delete;
+	run;
+	
+	Data Conv1e;
+		set Conv1e;
+		Call symput('Maxit', Iteration);
+	run;
+
+
+	
+	/* 5.1f - Running a sub-macro to convert each variable separately */
+	Data Conv1f;
+		set Conv1c;
+		keep Order;
+	run;
+	
+	%macro Numeric;
+		%do i = 2 %to &Maxit;
+		
+		/* Identify required variable */
+		Data Conv1f1;
+			set Conv1d;
+			if Iteration ^= &i then delete;
+			Call symput('Var', Var);
+		run;
+		
+		/* Refine to required variable */
+		Data Conv1f2;
+			set Conv1c;
+			Keep Order &Var X&Var;
+			X&Var = input(&Var, 8.);
+		run;
+		
+		/* Drop character variable */
+		Data Conv1f3;
+			set Conv1f2;
+			drop &Var;
+		run;
+		
+		/* Rename nueric variable */
+		Data Conv1f4;
+			set Conv1f3;
+			Rename X&Var = &Var;
+		run;
+		
+		/* Merging with the Conv1f data set */
+		Data Conv1f;
+			Merge Conv1f Conv1f4;
+			by Order;
+		run;
+		%end;
+	%mend;
+	
+	%Numeric;
+	
+	
+	/* 5.1g - Merging the ID and non-ID variables  */
+	Data Conv1g;
+		Merge Conv1b Conv1f;
+		by Order;
+		drop Order;
+	run;
+	
+	/* 5.1h - Creating a results data set */
+	Data V_&Dat;
+		set Conv1g;
+	run;
+
+%mend;
+
+%Convert(W_X_Y_ZZZ_INDP1);
+%Convert(W_X_Y_ZZZ_INDP2);
+%Convert(W_X_Y_ZZZ_INDP3A);
+%Convert(W_X_Y_ZZZ_DWELL);
+%Convert(W_X_Y_ZZZ_HOUSE);
+
+
+
+
+
+
+
+
+
+/* Section X */
+/*-----------------------------------------------------------------------------------------------------------------------*/
+/* Producing Permanent Output Data Sets */
+
+/* X.1 - Producing results data sets */
+/*
+Data AAA_INDIVIDUAL_PART1;
+	set V_W_X_Y_ZZZ_INDP1;
+run;
+	
+Data AAA_INDIVIDUAL_PART2;
+	set V_W_X_Y_ZZZ_INDP2;
+run;
+
+Data AAA_INDIVIDUAL_PART3A;
+	set V_W_X_Y_ZZZ_INDP3A;
+run;
+
+Data AAA_Dwellings;
+	set V_W_X_Y_ZZZ_DWELL;
+run;
+
+Data AAA_Household;
+	set V_W_X_Y_ZZZ_House;
+run;
+	
+
+
+/* X.2 - Producing permanent output data sets */
+/*
+Data output.INDIVIDUAL_PART1;
+	set AAA_INDIVIDUAL_PART1;
+run;
+
+Data output.INDIVIDUAL_PART2;
+	set AAA_INDIVIDUAL_PART2;
+run;
+
+Data output.INDIVIDUAL_PART3A;
+	set AAA_INDIVIDUAL_PART3A;
+run;
+
+Data output.Dwellings;
+	set AAA_Dwellings;
+run;
+
+Data output.Household;
+	set AAA_Household;
+run;
+
+Data Output.AAA_DATA_DICTIONARY;
+	set AAA_DATA_DICTIONARY;
+run;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
